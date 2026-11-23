@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>极简清单</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2307C160'/%3E%3Cellipse cx='26' cy='27' rx='15' ry='12.5' fill='white'/%3E%3Cpath d='M14 36 L11 44 L21 38Z' fill='white'/%3E%3Cellipse cx='41' cy='39' rx='13' ry='10.5' fill='white' stroke='%2307C160' stroke-width='2.5'/%3E%3Cpath d='M50 46 L54 52 L45 48Z' fill='white'/%3E%3Ccircle cx='20' cy='25' r='2' fill='%2307C160'/%3E%3Ccircle cx='31' cy='25' r='2' fill='%2307C160'/%3E%3Ccircle cx='37' cy='38' r='1.7' fill='%2307C160'/%3E%3Ccircle cx='46' cy='38' r='1.7' fill='%2307C160'/%3E%3C/svg%3E">
+<style>
+:root{--bg:#1c1b1a;--fg:#e8e6e3;--dim:#8a8782;--line:#3a3835;--o:#D97757;--g:#07C160;color-scheme:dark}
+*{box-sizing:border-box}
+html{background:var(--bg)}
+body{margin:0;padding:32px 20px 64px;color:var(--fg);background:var(--bg);
+  font:15px/1.75 "SF Mono",ui-monospace,Menlo,Consolas,"PingFang SC","Microsoft YaHei",monospace}
+main{max-width:680px;margin:0 auto}
+button,input{font:inherit;color:inherit}
+button{background:none;border:0;padding:0;cursor:pointer}
+:focus-visible{outline:2px solid var(--o);outline-offset:2px;border-radius:3px}
+
+.head{border:1px solid var(--o);border-radius:10px;padding:16px 20px;margin-bottom:20px}
+.head h1{margin:0;font-size:15px;font-weight:700;color:var(--o)}
+.head p{margin:2px 0 12px;color:var(--dim)}
+.bar{letter-spacing:.5px}
+.bar b{font-weight:400;color:var(--g)}
+.cmds{margin-top:12px;display:flex;gap:18px;flex-wrap:wrap}
+.cmds button{color:var(--o)}
+.cmds button:hover{text-decoration:underline}
+.cmds span{color:var(--dim)}
+
+#focus{margin:0 0 20px;padding-left:2px;color:var(--o)}
+#focus b{font-weight:700;color:var(--fg)}
+
+.group{margin-bottom:22px}
+h2{margin:0;font-size:15px;font-weight:700;display:flex;align-items:baseline;gap:8px}
+.dot{color:var(--o)}
+.n{color:var(--dim);font-weight:400}
+ul{list-style:none;margin:0;padding:0}
+.item,.add{display:flex;align-items:baseline;gap:8px;padding-left:4px}
+.tree{color:var(--line);flex:none;width:1.2em}
+.chk{flex:none;color:var(--dim)}
+.chk:hover{color:var(--fg)}
+.txt,.gname{outline:none;border-radius:3px;min-width:2em}
+.txt{flex:1;overflow-wrap:anywhere}
+.txt:focus,.gname:focus{background:#2a2826;box-shadow:0 0 0 3px #2a2826}
+.done .txt{color:var(--dim);text-decoration:line-through}
+.done .chk{color:var(--g)}
+.focus .tree,.focus .txt{color:var(--o)}
+.del{color:var(--dim);opacity:0;padding:0 6px}
+.item:hover .del,.item:focus-within .del,h2:hover .del,h2:focus-within .del{opacity:1}
+.del:hover{color:#e5604d}
+@media(hover:none){.del{opacity:.5}}
+.add input{flex:1;background:none;border:0;border-bottom:1px dashed var(--line);outline:none;padding:0;color:var(--fg)}
+.add input:focus{border-bottom-color:var(--o)}
+::placeholder{color:#5f5c58}
+
+.prompt{display:flex;gap:10px;border:1px solid var(--line);border-radius:10px;padding:10px 16px;margin-top:8px}
+.prompt:focus-within{border-color:var(--o)}
+.prompt span{color:var(--o)}
+.prompt input{flex:1;background:none;border:0;outline:none}
+.hint{margin:16px 2px 0;color:var(--dim);font-size:13px}
+@media(prefers-reduced-motion:no-preference){.item.focus{animation:pulse 1.2s ease-out 1}}
+@keyframes pulse{from{background:#3a2a22}to{background:transparent}}
+</style>
+</head>
+<body>
+<main>
+  <header class="head">
+    <h1>✻ 极简清单</h1>
+    <p>刷之前，先做一件。</p>
+    <div class="bar" id="bar"></div>
+    <div class="cmds">
+      <button id="pick">/pick 抽一件现在做</button>
+      <button id="reset">/reset 全部清零</button>
+    </div>
+  </header>
+  <p id="focus" hidden></p>
+  <div id="list"></div>
+  <form class="prompt" id="newgroup">
+    <span>&gt;</span>
+    <input id="gname" placeholder="新分类名称，回车添加" aria-label="新分类名称" maxlength="30">
+  </form>
+  <p class="hint">点文字直接修改，悬停出现 × 可删除。数据只保存在这台设备的浏览器里。</p>
+</main>
+<script>
+const KEY = 'declutter.v1';
+const $ = s => document.querySelector(s);
+const uid = () => Math.random().toString(36).slice(2, 9);
+const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const mk = (name, items) => ({ id: uid(), name, items: items.map(t => ({ id: uid(), t, d: false })) });
+
+function defaults() {
+  return { focus: null, groups: [
+    mk('清理手机', ['删掉重复和模糊的照片', '清空截图相册', '卸载 30 天没打开的 app', '取消关注不再读的公众号', '清理微信缓存和聊天文件']),
+    mk('整理笔记', ['把零散笔记归进一个文件夹', '删掉过期的待办', '挑三条最有用的，写成一页']),
+    mk('整理家务', ['收拾书桌，只留今天要用的', '清衣柜，一年没穿的放进捐赠袋', '倒垃圾，擦桌面'])
+  ]};
+}
+function load() {
+  try {
+    const s = JSON.parse(localStorage.getItem(KEY));
+    if (s && Array.isArray(s.groups)) return s;
+  } catch (e) {}
+  return defaults();
+}
+function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
+
+let state = load(), lastAdd = null;
+
+function render() {
+  const all = state.groups.flatMap(g => g.items);
+  const done = all.filter(x => x.d).length, total = all.length;
+  const b = total ? Math.round(done / total * 10) : 0;
+  $('#bar').innerHTML = `[<b>${'█'.repeat(b)}</b>${'░'.repeat(10 - b)}] ${done}/${total}` +
+    (total && done === total ? '　都清完了，放下手机。' : '');
+
+  const f = all.find(x => x.id === state.focus && !x.d);
+  $('#focus').hidden = !f;
+  if (f) $('#focus').innerHTML = `▸ 现在只做这一件：<b>${esc(f.t)}</b>`; else state.focus = null;
+
+  $('#list').innerHTML = state.groups.map(g => {
+    const n = g.items.filter(x => x.d).length;
+    const items = g.items.map(x => `
+      <li class="item${x.d ? ' done' : ''}${state.focus === x.id ? ' focus' : ''}" data-i="${x.id}">
+        <span class="tree">${state.focus === x.id ? '▸' : '⎿'}</span>
+        <button class="chk" role="checkbox" aria-checked="${x.d}" aria-label="完成" data-act="tog">${x.d ? '[x]' : '[ ]'}</button>
+        <span class="txt" contenteditable="plaintext-only" spellcheck="false" data-edit="item">${esc(x.t)}</span>
+        <button class="del" data-act="deli" aria-label="删除这一项">×</button>
+      </li>`).join('');
+    return `<section class="group" data-g="${g.id}">
+      <h2><span class="dot">●</span>
+        <span class="gname" contenteditable="plaintext-only" spellcheck="false" data-edit="group">${esc(g.name)}</span>
+        <span class="n">${n}/${g.items.length}</span>
+        <button class="del" data-act="delg" aria-label="删除这个分类">×</button></h2>
+      <ul>${items}</ul>
+      <form class="add"><span class="tree">⎿</span><input placeholder="添加一项，回车保存" aria-label="添加一项" maxlength="80"></form>
+    </section>`;
+  }).join('');
+
+  if (lastAdd) {
+    const i = document.querySelector(`[data-g="${lastAdd}"] .add input`);
+    if (i) i.focus();
+    lastAdd = null;
+  }
+}
+
+const list = $('#list');
+const ctx = el => {
+  const g = state.groups.find(x => x.id === el.closest('.group').dataset.g);
+  const li = el.closest('.item');
+  return { g, it: li && g.items.find(x => x.id === li.dataset.i) };
+};
+
+list.addEventListener('click', e => {
+  const b = e.target.closest('[data-act]');
+  if (!b) return;
+  const { g, it } = ctx(b);
+  const act = b.dataset.act;
+  if (act === 'tog') { it.d = !it.d; if (it.d && state.focus === it.id) state.focus = null; }
+  if (act === 'deli') { g.items = g.items.filter(x => x !== it); if (state.focus === it.id) state.focus = null; }
+  if (act === 'delg') {
+    if (g.items.length && !confirm(`删除「${g.name}」和里面的 ${g.items.length} 项？`)) return;
+    state.groups = state.groups.filter(x => x !== g);
+  }
+  save(); render();
+});
+
+list.addEventListener('focusout', e => {
+  const el = e.target.closest && e.target.closest('[data-edit]');
+  if (!el) return;
+  const { g, it } = ctx(el);
+  const v = el.textContent.trim();
+  if (el.dataset.edit === 'group') { if (v) g.name = v; else el.textContent = g.name; save(); return; }
+  if (!v) { g.items = g.items.filter(x => x !== it); save(); render(); return; }
+  it.t = v; el.textContent = v; save();
+  if (state.focus === it.id) $('#focus').innerHTML = `▸ 现在只做这一件：<b>${esc(v)}</b>`;
+});
+
+list.addEventListener('keydown', e => {
+  const el = e.target.closest && e.target.closest('[data-edit]');
+  if (!el) return;
+  if (e.key === 'Enter') { e.preventDefault(); el.blur(); }
+  if (e.key === 'Escape') { el.blur(); render(); }
+});
+
+list.addEventListener('submit', e => {
+  e.preventDefault();
+  const inp = e.target.querySelector('input');
+  const v = inp.value.trim();
+  if (!v) return;
+  const { g } = ctx(e.target);
+  g.items.push({ id: uid(), t: v, d: false });
+  lastAdd = g.id; save(); render();
+});
+
+$('#newgroup').addEventListener('submit', e => {
+  e.preventDefault();
+  const v = $('#gname').value.trim();
+  if (!v) return;
+  const g = mk(v, []);
+  state.groups.push(g);
+  $('#gname').value = '';
+  lastAdd = g.id; save(); render();
+});
+
+$('#pick').addEventListener('click', () => {
+  const open = state.groups.flatMap(g => g.items).filter(x => !x.d);
+  if (!open.length) { render(); return; }
+  const pool = open.length > 1 ? open.filter(x => x.id !== state.focus) : open;
+  state.focus = pool[Math.floor(Math.random() * pool.length)].id;
+  save(); render();
+  const el = document.querySelector('.item.focus');
+  const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (el) el.scrollIntoView({ block: 'center', behavior: calm ? 'auto' : 'smooth' });
+});
+
+$('#reset').addEventListener('click', () => {
+  if (!confirm('把所有完成标记清零？')) return;
+  state.groups.forEach(g => g.items.forEach(x => x.d = false));
+  state.focus = null; save(); render();
+});
+
+render();
+</script>
+</body>
+</html>
