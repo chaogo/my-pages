@@ -5,7 +5,7 @@ quickly turn html pages into personal apps
 ## Pages
 
 - `index.html` is the app launcher.
-- `fake-wechat/index.html` and `solo-dev/index.html` are starter app pages.
+- `fake-wechat/index.html`, `solo-dev/index.html`, and `shell_dict/shell_dict.html` are app pages.
 - `styles.css` contains the shared mobile-friendly styles.
 
 ## Publish

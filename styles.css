@@ -103,6 +103,13 @@ h1 {
   font-size: 1rem;
 }
 
+.app-icon-dict {
+  background: #e8f5e9;
+  color: #0a6b3a;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.82rem;
+}
+
 .app-copy {
   display: grid;
   gap: 5px;
